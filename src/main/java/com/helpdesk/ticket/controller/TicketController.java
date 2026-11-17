@@ -44,9 +44,10 @@ public class TicketController {
     public ResponseEntity<Page<TicketResponseDTO>> findAll(
             @RequestParam(required = false) TicketStatus status,
             @RequestParam(required = false) TicketPriority priority,
-            @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+            @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            Authentication authentication
     ) {
-        Page<TicketResponseDTO> tickets = ticketService.findAll(status, priority, pageable);
+        Page<TicketResponseDTO> tickets = ticketService.findAll(status, priority, pageable, authentication.getName());
         return ResponseEntity.ok(tickets);
     }
 
@@ -62,17 +63,21 @@ public class TicketController {
     }
 
     @GetMapping("/{id}/comments")
-    public ResponseEntity<List<TicketCommentResponseDTO>> getComments(@PathVariable Long id) {
-        List<TicketCommentResponseDTO> comments = ticketService.getCommentsByTicket(id);
+    public ResponseEntity<List<TicketCommentResponseDTO>> getComments(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        List<TicketCommentResponseDTO> comments = ticketService.getCommentsByTicket(id, authentication.getName());
         return ResponseEntity.ok(comments);
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<TicketResponseDTO> updateStatus(
             @PathVariable Long id,
-            @RequestBody @Valid TicketStatusUpdateDTO dto
+            @RequestBody @Valid TicketStatusUpdateDTO dto,
+            Authentication authentication
     ) {
-        TicketResponseDTO response = ticketService.updateStatus(id, dto);
+        TicketResponseDTO response = ticketService.updateStatus(id, dto, authentication.getName());
         return ResponseEntity.ok(response);
     }
 }

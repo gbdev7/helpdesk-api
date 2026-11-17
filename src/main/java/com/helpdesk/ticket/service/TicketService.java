@@ -12,10 +12,12 @@ import com.helpdesk.ticket.dto.TicketResponseDTO;
 import com.helpdesk.ticket.dto.TicketStatusUpdateDTO;
 import com.helpdesk.ticket.repository.TicketCommentRepository;
 import com.helpdesk.ticket.repository.TicketRepository;
+import com.helpdesk.user.domain.Role;
 import com.helpdesk.user.domain.User;
 import com.helpdesk.user.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,10 +41,21 @@ public class TicketService {
         this.commentRepository = commentRepository;
     }
 
+    private User getUser(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado com e-mail: " + email));
+    }
+
+    /** Cliente só acessa chamados dele. Para os demais, responde 404 (não revela que o chamado existe). */
+    private void checkTicketAccess(Ticket ticket, User user) {
+        if (user.getRole() == Role.CLIENT && !ticket.getCustomer().getId().equals(user.getId())) {
+            throw new ResourceNotFoundException("Chamado não encontrado com ID: " + ticket.getId());
+        }
+    }
+
     @Transactional
     public TicketResponseDTO create(TicketCreateDTO dto, String userEmail) {
-        User customer = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado com e-mail: " + userEmail));
+        User customer = getUser(userEmail);
 
         Ticket ticket = new Ticket(dto.title(), dto.description(), dto.priority(), customer);
         Ticket savedTicket = ticketRepository.save(ticket);
@@ -51,9 +64,14 @@ public class TicketService {
     }
 
     @Transactional(readOnly = true)
-    public Page<TicketResponseDTO> findAll(TicketStatus status, TicketPriority priority, Pageable pageable) {
-        return ticketRepository.findByFilters(status, priority, pageable)
-                .map(TicketResponseDTO::fromEntity);
+    public Page<TicketResponseDTO> findAll(TicketStatus status, TicketPriority priority, Pageable pageable, String userEmail) {
+        User user = getUser(userEmail);
+
+        Page<Ticket> page = user.getRole() == Role.CLIENT
+                ? ticketRepository.findByCustomerAndFilters(user.getId(), status, priority, pageable)
+                : ticketRepository.findByFilters(status, priority, pageable);
+
+        return page.map(TicketResponseDTO::fromEntity);
     }
 
     @Transactional
@@ -61,8 +79,8 @@ public class TicketService {
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new ResourceNotFoundException("Chamado não encontrado com ID: " + ticketId));
 
-        User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado com e-mail: " + userEmail));
+        User user = getUser(userEmail);
+        checkTicketAccess(ticket, user);
 
         TicketComment comment = new TicketComment(dto.content(), ticket, user);
         TicketComment savedComment = commentRepository.save(comment);
@@ -71,10 +89,11 @@ public class TicketService {
     }
 
     @Transactional(readOnly = true)
-    public List<TicketCommentResponseDTO> getCommentsByTicket(Long ticketId) {
-        if (!ticketRepository.existsById(ticketId)) {
-            throw new ResourceNotFoundException("Chamado não encontrado com ID: " + ticketId);
-        }
+    public List<TicketCommentResponseDTO> getCommentsByTicket(Long ticketId, String userEmail) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResourceNotFoundException("Chamado não encontrado com ID: " + ticketId));
+
+        checkTicketAccess(ticket, getUser(userEmail));
 
         return commentRepository.findByTicketIdOrderByCreatedAtAsc(ticketId)
                 .stream()
@@ -83,7 +102,12 @@ public class TicketService {
     }
 
     @Transactional
-    public TicketResponseDTO updateStatus(Long ticketId, TicketStatusUpdateDTO dto) {
+    public TicketResponseDTO updateStatus(Long ticketId, TicketStatusUpdateDTO dto, String userEmail) {
+        User requester = getUser(userEmail);
+        if (requester.getRole() == Role.CLIENT) {
+            throw new AccessDeniedException("Apenas técnicos e administradores podem alterar chamados.");
+        }
+
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new ResourceNotFoundException("Chamado não encontrado com ID: " + ticketId));
 
