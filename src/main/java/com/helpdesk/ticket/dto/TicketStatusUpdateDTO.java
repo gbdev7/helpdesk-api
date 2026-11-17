@@ -1,10 +1,12 @@
 package com.helpdesk.ticket.dto;
 
+import com.helpdesk.ticket.domain.TicketPriority;
 import com.helpdesk.ticket.domain.TicketStatus;
 import jakarta.validation.constraints.NotNull;
 
 public record TicketStatusUpdateDTO(
         @NotNull(message = "O novo status é obrigatório")
         TicketStatus status,
-        Long technicianId // Opcional: ID do técnico atribuído
+        Long technicianId, // Opcional: ID do técnico atribuído
+        TicketPriority priority // Opcional: nova prioridade
 ) {}
