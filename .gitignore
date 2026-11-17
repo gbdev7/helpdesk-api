@@ -14,7 +14,8 @@ target/
 out/
 
 # Eclipse
-.apt_generated
+.apt_generatedev
+
 .classpath
 .factorypath
 .project

@@ -95,6 +95,12 @@ public class TicketService {
             ticket.setTechnician(technician);
         }
 
+        if (dto.priority() != null && dto.priority() != ticket.getPriority()) {
+            ticket.setPriority(dto.priority());
+            // O SLA depende da prioridade: recalcula o prazo a partir da abertura do chamado
+            ticket.setSlaDueDate(ticket.getCreatedAt().plusHours(dto.priority().getSlaHours()));
+        }
+
         ticket.setUpdatedAt(LocalDateTime.now());
         Ticket updatedTicket = ticketRepository.save(ticket);
 
